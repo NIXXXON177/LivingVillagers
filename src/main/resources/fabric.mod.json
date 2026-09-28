@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "livingvillagers",
+  "version": "${version}",
+  "name": "LivingVillagers",
+  "description": "Живые жители: роли, доверие, Глава деревни, Указы, армия, рынок и добыча в Nether. Личный приватный проект, см. ТЗ.",
+  "authors": [
+    "you"
+  ],
+  "contact": {},
+  "license": "Все права защищены (приватный проект, не публикуется)",
+  "icon": "assets/livingvillagers/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.livingvillagers.LivingVillagersMod"
+    ],
+    "client": [
+      "com.livingvillagers.client.LivingVillagersModClient"
+    ]
+  },
+  "mixins": [
+    "livingvillagers.mixins.json",
+    {
+      "config": "livingvillagers.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.9",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

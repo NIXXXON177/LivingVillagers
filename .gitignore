@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+out/
+classes/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# VS Code
+.vscode/
+
+# Логи и данные запуска Minecraft (создаются задачей runClient/runServer)
+run/
+
+# ОС
+.DS_Store
+Thumbs.db
