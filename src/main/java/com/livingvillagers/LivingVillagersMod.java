@@ -1,9 +1,15 @@
 package com.livingvillagers;
 
+import com.livingvillagers.registry.ModBlocks;
+import com.livingvillagers.registry.ModPointsOfInterest;
+import com.livingvillagers.registry.ModProfessions;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.item.ItemGroups;
+import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.village.VillagerProfession;
 import org.slf4j.Logger;
@@ -11,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+
 
 /**
  * Главная точка входа мода LivingVillagers.
@@ -54,6 +61,9 @@ public class LivingVillagersMod implements ModInitializer {
 		PROFESSION_LABELS.put("shepherd", "Пастух");
 		PROFESSION_LABELS.put("toolsmith", "Инструментальщик");
 		PROFESSION_LABELS.put("weaponsmith", "Оружейник");
+
+		// Наши собственные роли из ТЗ (раздел 9, Волна 1 и далее).
+		PROFESSION_LABELS.put("lumberjack", "Лесоруб");
 	}
 
 	// Считаем тики, чтобы не пересчитывать подписи каждый такт (это дорого) —
@@ -65,6 +75,19 @@ public class LivingVillagersMod implements ModInitializer {
 		// Эта строка появится в логе Minecraft (logs/latest.log) при старте игры,
 		// если мод корректно загрузился.
 		LOGGER.info("LivingVillagers: мод загружен, окружение настроено верно (Этап 0 пройден).");
+
+		// Порядок важен: сначала блок, потом POI (ему нужен блок), потом
+		// профессия (ей нужен POI). См. пакет com.livingvillagers.registry.
+		ModBlocks.init();
+		ModPointsOfInterest.init();
+		ModProfessions.init();
+
+		// Кладём "Пост лесоруба" во вкладку творческого инвентаря "Функциональные
+		// блоки" — чтобы его было легко найти и поставить рядом с жителем без команд.
+		ItemGroupEvents.modifyEntriesEvent(ItemGroups.FUNCTIONAL).register(entries ->
+				entries.add(new ItemStack(ModBlocks.LUMBERJACK_POST)));
+
+		LOGGER.info("LivingVillagers: зарегистрирована первая роль — Лесоруб (POI: lumberjack_post).");
 
 		// Раз в секунду проходим по всем жителям в каждом загруженном мире
 		// и обновляем им подпись над головой в соответствии с профессией.
