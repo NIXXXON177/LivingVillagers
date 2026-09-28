@@ -230,7 +230,14 @@ public final class LumberjackBehavior {
 		state.treeLogType = null;
 	}
 
-	/** Ищет ближайшее основание ствола (бревно, под которым нет другого бревна). */
+	// Насколько далеко (по горизонтали/вертикали от основания ствола) искать
+	// листву, чтобы отличить настоящее дерево от бревна, использованного как
+	// стройматериал (в ванильных деревнях бревна — обычная деталь домов).
+	private static final int LEAF_CHECK_HORIZONTAL_RADIUS = 3;
+	private static final int LEAF_CHECK_VERTICAL_UP = 12;
+
+	/** Ищет ближайшее основание НАСТОЯЩЕГО дерева (бревно, под которым нет другого
+	 * бревна, и рядом с которым есть листва — чтобы не рубить бревенчатые стены домов). */
 	private static BlockPos findNearestTreeBase(ServerWorld world, BlockPos origin) {
 		BlockPos.Mutable cursor = new BlockPos.Mutable();
 		BlockPos best = null;
@@ -254,15 +261,37 @@ public final class LumberjackBehavior {
 					}
 
 					double distanceSquared = cursor.getSquaredDistance(origin);
-					if (distanceSquared < bestDistanceSquared) {
-						bestDistanceSquared = distanceSquared;
-						best = cursor.toImmutable();
+					if (distanceSquared >= bestDistanceSquared) {
+						continue; // и так дальше уже найденного кандидата — не тратим время на проверку листвы
 					}
+
+					if (!hasNearbyLeaves(world, cursor)) {
+						continue; // рядом нет листвы — почти наверняка это бревно в стене дома, а не дерево
+					}
+
+					bestDistanceSquared = distanceSquared;
+					best = cursor.toImmutable();
 				}
 			}
 		}
 
 		return best;
+	}
+
+	/** Проверяет, есть ли где-то рядом (над и вокруг возможного ствола) блок листвы. */
+	private static boolean hasNearbyLeaves(ServerWorld world, BlockPos basePos) {
+		BlockPos.Mutable cursor = new BlockPos.Mutable();
+		for (int dy = 0; dy <= LEAF_CHECK_VERTICAL_UP; dy++) {
+			for (int dx = -LEAF_CHECK_HORIZONTAL_RADIUS; dx <= LEAF_CHECK_HORIZONTAL_RADIUS; dx++) {
+				for (int dz = -LEAF_CHECK_HORIZONTAL_RADIUS; dz <= LEAF_CHECK_HORIZONTAL_RADIUS; dz++) {
+					cursor.set(basePos.getX() + dx, basePos.getY() + dy, basePos.getZ() + dz);
+					if (world.getBlockState(cursor).isIn(BlockTags.LEAVES)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
 	}
 
 	/** Собирает подряд идущие вверх бревна одного типа, начиная с основания ствола. */
