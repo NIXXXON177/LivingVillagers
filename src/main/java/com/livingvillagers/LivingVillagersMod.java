@@ -1,5 +1,6 @@
 package com.livingvillagers;
 
+import com.livingvillagers.behavior.LumberjackBehavior;
 import com.livingvillagers.registry.ModBlocks;
 import com.livingvillagers.registry.ModPointsOfInterest;
 import com.livingvillagers.registry.ModProfessions;
@@ -107,17 +108,20 @@ public class LivingVillagersMod implements ModInitializer {
 						.then(CommandManager.argument("radius", IntegerArgumentType.integer(1, 128))
 								.executes(ctx -> runLvPoiCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "radius"))))));
 
-		// Раз в секунду проходим по всем жителям в каждом загруженном мире
-		// и обновляем им подпись над головой в соответствии с профессией.
+		// Каждый тик проходим по всем жителям в каждом загруженном мире:
+		// - лесорубам даём "подумать" над рубкой дерева (нужна частая проверка,
+		//   иначе движение/рубка будут дёргаными);
+		// - подпись над головой обновляем реже, раз в секунду — незачем чаще.
 		ServerTickEvents.END_WORLD_TICK.register(world -> {
 			tickCounter++;
-			if (tickCounter % 20 != 0) {
-				return;
-			}
+			boolean updateNameTags = tickCounter % 20 == 0;
 
 			for (Entity entity : world.iterateEntities()) {
 				if (entity instanceof VillagerEntity villager) {
-					updateNameTag(villager);
+					LumberjackBehavior.tick(world, villager);
+					if (updateNameTags) {
+						updateNameTag(villager);
+					}
 				}
 			}
 		});
