@@ -1,5 +1,7 @@
 {
   "block.livingvillagers.lumberjack_post": "Lumberjack's Post",
+  "block.livingvillagers.builder_post": "Builder's Post",
   "itemGroup.livingvillagers": "LivingVillagers",
-  "entity.minecraft.villager.lumberjack": "Lumberjack"
+  "entity.minecraft.villager.lumberjack": "Lumberjack",
+  "entity.minecraft.villager.builder": "Builder"
 }

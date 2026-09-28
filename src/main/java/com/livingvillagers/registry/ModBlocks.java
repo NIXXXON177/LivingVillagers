@@ -27,6 +27,11 @@ public final class ModBlocks {
 
 	public static final Block LUMBERJACK_POST = register("lumberjack_post");
 
+	// Рабочее место Строителя. Как и lumberjack_post на старте — заглушка
+	// без своей 3D-модели (используем автогенерируемый cube_all), полноценная
+	// модель может появиться позже так же, как это уже сделали для лесоруба.
+	public static final Block BUILDER_POST = register("builder_post");
+
 	private ModBlocks() {
 	}
 

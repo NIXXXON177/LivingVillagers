@@ -1,5 +1,6 @@
 package com.livingvillagers;
 
+import com.livingvillagers.behavior.BuilderBehavior;
 import com.livingvillagers.behavior.LumberjackBehavior;
 import com.livingvillagers.registry.ModBlocks;
 import com.livingvillagers.registry.ModPointsOfInterest;
@@ -72,6 +73,7 @@ public class LivingVillagersMod implements ModInitializer {
 
 		// Наши собственные роли из ТЗ (раздел 9, Волна 1 и далее).
 		PROFESSION_LABELS.put("lumberjack", "Лесоруб");
+		PROFESSION_LABELS.put("builder", "Строитель");
 	}
 
 	// Считаем тики, чтобы не пересчитывать подписи каждый такт (это дорого) —
@@ -92,10 +94,13 @@ public class LivingVillagersMod implements ModInitializer {
 
 		// Кладём "Пост лесоруба" во вкладку творческого инвентаря "Функциональные
 		// блоки" — чтобы его было легко найти и поставить рядом с жителем без команд.
-		ItemGroupEvents.modifyEntriesEvent(ItemGroups.FUNCTIONAL).register(entries ->
-				entries.add(new ItemStack(ModBlocks.LUMBERJACK_POST)));
+		ItemGroupEvents.modifyEntriesEvent(ItemGroups.FUNCTIONAL).register(entries -> {
+			entries.add(new ItemStack(ModBlocks.LUMBERJACK_POST));
+			entries.add(new ItemStack(ModBlocks.BUILDER_POST));
+		});
 
 		LOGGER.info("LivingVillagers: зарегистрирована первая роль — Лесоруб (POI: lumberjack_post).");
+		LOGGER.info("LivingVillagers: зарегистрирована роль Строитель (POI: builder_post).");
 
 		// Отладочная команда: /lvpoi [радиус] — печатает все точки интереса
 		// (POI), которые движок реально видит вокруг игрока, и их статус
@@ -119,6 +124,7 @@ public class LivingVillagersMod implements ModInitializer {
 			for (Entity entity : world.iterateEntities()) {
 				if (entity instanceof VillagerEntity villager) {
 					LumberjackBehavior.tick(world, villager);
+					BuilderBehavior.tick(world, villager);
 					if (updateNameTags) {
 						updateNameTag(villager);
 					}

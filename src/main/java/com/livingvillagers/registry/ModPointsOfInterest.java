@@ -37,6 +37,16 @@ public final class ModPointsOfInterest {
 			ModBlocks.LUMBERJACK_POST
 	);
 
+	public static final RegistryKey<PointOfInterestType> BUILDER_POST_KEY =
+			RegistryKey.of(RegistryKeys.POINT_OF_INTEREST_TYPE, Identifier.of(LivingVillagersMod.MOD_ID, "builder_post"));
+
+	public static final PointOfInterestType BUILDER_POST = PointOfInterestHelper.register(
+			BUILDER_POST_KEY.getValue(),
+			1,
+			1,
+			ModBlocks.BUILDER_POST
+	);
+
 	private ModPointsOfInterest() {
 	}
 

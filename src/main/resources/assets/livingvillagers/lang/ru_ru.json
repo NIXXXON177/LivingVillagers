@@ -1,5 +1,7 @@
 {
   "block.livingvillagers.lumberjack_post": "Пост лесоруба",
+  "block.livingvillagers.builder_post": "Пост строителя",
   "itemGroup.livingvillagers": "LivingVillagers",
-  "entity.minecraft.villager.lumberjack": "Лесоруб"
+  "entity.minecraft.villager.lumberjack": "Лесоруб",
+  "entity.minecraft.villager.builder": "Строитель"
 }

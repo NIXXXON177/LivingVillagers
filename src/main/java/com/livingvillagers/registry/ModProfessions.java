@@ -27,6 +27,12 @@ public final class ModProfessions {
 			SoundEvents.ENTITY_VILLAGER_WORK_FLETCHER
 	);
 
+	public static final VillagerProfession BUILDER = register(
+			"builder",
+			ModPointsOfInterest.BUILDER_POST_KEY,
+			SoundEvents.ENTITY_VILLAGER_WORK_MASON
+	);
+
 	private ModProfessions() {
 	}
 

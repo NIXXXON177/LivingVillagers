@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "livingvillagers:lumberjack_post"
+    "livingvillagers:lumberjack_post",
+    "livingvillagers:builder_post"
   ]
 }
