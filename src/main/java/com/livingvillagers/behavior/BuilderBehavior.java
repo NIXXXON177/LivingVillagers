@@ -7,8 +7,12 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ChestBlock;
+import net.minecraft.block.DoorBlock;
 import net.minecraft.block.HorizontalFacingBlock;
+import net.minecraft.block.StairsBlock;
 import net.minecraft.block.enums.BedPart;
+import net.minecraft.block.enums.DoorHinge;
+import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.passive.VillagerEntity;
@@ -17,10 +21,12 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.TypeFilter;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -84,7 +90,6 @@ public final class BuilderBehavior {
 	// ---------- Геометрия построек ----------
 	private static final int FOOTPRINT = 5;      // 5x5 в плане (локальные x,z: 0..4)
 	private static final int WALL_HEIGHT = 3;    // стены: y = 1..3
-	private static final int ROOF_Y = 4;         // крыша: y = 4
 	private static final int FLOOR_Y = 0;
 
 	// ---------- Радиусы поиска ----------
@@ -131,8 +136,14 @@ public final class BuilderBehavior {
 
 	/** Откуда шаг берёт материал. */
 	private enum ResourceKind {
-		FREE,     // не требует ресурса (пока не производится в моде)
-		ANY_LOG   // нужно ЛЮБОЕ бревно — забирается у ближайшего жителя, у которого оно есть
+		FREE,             // не требует ресурса (пока не производится в моде)
+		ANY_LOG,          // нужно ЛЮБОЕ бревно — забирается у ближайшего жителя и кладётся как есть (брёвна каркаса)
+		ANY_LOG_AS_PLANKS // тоже забирается бревно у соседа, но кладётся как доски того же вида дерева (обшивка стен/пол)
+	}
+
+	/** true для видов ресурса, которые нужно предварительно "забрать" у соседнего жителя (см. tryTakeLogFromNearbyVillager). */
+	private static boolean needsResolvedLog(ResourceKind kind) {
+		return kind == ResourceKind.ANY_LOG || kind == ResourceKind.ANY_LOG_AS_PLANKS;
 	}
 
 	private static final class BuildStep {
@@ -402,7 +413,7 @@ public final class BuilderBehavior {
 	private static void tickWorking(ServerWorld world, VillagerEntity villager, BuilderState state, VillageProgress progress) {
 		BuildStep step = state.currentStep;
 
-		if (step.kind == BuildStep.Kind.BLOCK && step.resource == ResourceKind.ANY_LOG && state.resolvedBlockState == null) {
+		if (step.kind == BuildStep.Kind.BLOCK && needsResolvedLog(step.resource) && state.resolvedBlockState == null) {
 			if (state.materialWaitCooldown > 0) {
 				state.materialWaitCooldown--;
 				state.materialWaitTotalTicks++;
@@ -453,9 +464,14 @@ public final class BuilderBehavior {
 			return;
 		}
 
-		BlockState toPlace = (step.resource == ResourceKind.ANY_LOG && state.resolvedBlockState != null)
-				? state.resolvedBlockState
-				: step.blockState;
+		BlockState toPlace;
+		if (step.resource == ResourceKind.ANY_LOG && state.resolvedBlockState != null) {
+			toPlace = state.resolvedBlockState;
+		} else if (step.resource == ResourceKind.ANY_LOG_AS_PLANKS && state.resolvedBlockState != null) {
+			toPlace = logToPlanks(state.resolvedBlockState);
+		} else {
+			toPlace = step.blockState;
+		}
 
 		world.setBlockState(step.pos, toPlace);
 		if (!toPlace.isAir()) {
@@ -465,6 +481,24 @@ public final class BuilderBehavior {
 	}
 
 	// ==================== Материалы ====================
+
+	/**
+	 * Превращает взятое у соседа бревно (любого вида: oak_log, stripped_birch_log,
+	 * crimson_stem и т.д.) в доски того же вида дерева — для обшивки стен и пола,
+	 * чтобы дом не выглядел сплошным бревенчатым коробом.
+	 */
+	private static BlockState logToPlanks(BlockState logState) {
+		Identifier logId = Registries.BLOCK.getId(logState.getBlock());
+		String path = logId.getPath();
+		if (path.startsWith("stripped_")) {
+			path = path.substring("stripped_".length());
+		}
+		String species = path.replace("_log", "").replace("_wood", "")
+				.replace("_stem", "").replace("_hyphae", "");
+		Identifier planksId = Identifier.of(logId.getNamespace(), species + "_planks");
+		Block planks = Registries.BLOCK.get(planksId);
+		return planks.getDefaultState();
+	}
 
 	/** Ищет ближайшего (по деревне) жителя с бревном в инвентаре, забирает 1 штуку. */
 	private static BlockState tryTakeLogFromNearbyVillager(ServerWorld world, BlockPos anchor) {
@@ -684,36 +718,96 @@ public final class BuilderBehavior {
 		return steps;
 	}
 
+	/**
+	 * Дом/склад 5x5: пол и обшивка стен — доски (из забранного бревна),
+	 * угловые столбы — цельные брёвна (каркас), одна настоящая дверь,
+	 * три окна из стекла и двускатная крыша со стропилами (см. addGableRoof).
+	 * Раньше это был сплошной бревенчатый короб без окон и с плоской
+	 * крышей — по замечанию игрока переделано на нормальный дом.
+	 */
 	private static void addFloorWallsAndRoof(Deque<BuildStep> steps, BlockPos origin) {
-		BlockState logPlaceholder = Blocks.OAK_LOG.getDefaultState(); // реально положенный вид определится по факту забора материала
+		BlockState logPlaceholder = Blocks.OAK_LOG.getDefaultState();     // угловые столбы каркаса
+		BlockState plankPlaceholder = Blocks.OAK_PLANKS.getDefaultState(); // обшивка (вид уточнится по факту забора бревна)
 
+		// Пол — доски.
 		for (int x = 0; x < FOOTPRINT; x++) {
 			for (int z = 0; z < FOOTPRINT; z++) {
-				steps.addLast(BuildStep.block(origin.add(x, FLOOR_Y, z), logPlaceholder, ResourceKind.ANY_LOG));
+				steps.addLast(BuildStep.block(origin.add(x, FLOOR_Y, z), plankPlaceholder, ResourceKind.ANY_LOG_AS_PLANKS));
 			}
 		}
 
+		int lastIdx = FOOTPRINT - 1;
 		int doorX = FOOTPRINT / 2;
+		int windowZ = FOOTPRINT / 2;
+
 		for (int y = 1; y <= WALL_HEIGHT; y++) {
 			for (int x = 0; x < FOOTPRINT; x++) {
 				for (int z = 0; z < FOOTPRINT; z++) {
-					boolean perimeter = (x == 0 || x == FOOTPRINT - 1 || z == 0 || z == FOOTPRINT - 1);
+					boolean perimeter = (x == 0 || x == lastIdx || z == 0 || z == lastIdx);
 					if (!perimeter) {
 						continue;
 					}
+
+					boolean corner = (x == 0 || x == lastIdx) && (z == 0 || z == lastIdx);
 					boolean doorway = (x == doorX && z == 0 && y <= 2);
+					boolean sideWindow = (y == 2) && (z == windowZ) && (x == 0 || x == lastIdx);
+					boolean backWindow = (y == 2) && (x == doorX) && (z == lastIdx);
+
+					BlockPos pos = origin.add(x, y, z);
+
 					if (doorway) {
-						steps.addLast(BuildStep.block(origin.add(x, y, z), Blocks.AIR.getDefaultState(), ResourceKind.FREE));
+						BlockState doorState = Blocks.OAK_DOOR.getDefaultState()
+								.with(DoorBlock.FACING, Direction.SOUTH)
+								.with(DoorBlock.HINGE, DoorHinge.LEFT)
+								.with(DoorBlock.OPEN, false)
+								.with(DoorBlock.POWERED, false)
+								.with(DoorBlock.HALF, y == 1 ? DoubleBlockHalf.LOWER : DoubleBlockHalf.UPPER);
+						steps.addLast(BuildStep.block(pos, doorState, ResourceKind.FREE));
+					} else if (sideWindow || backWindow) {
+						steps.addLast(BuildStep.block(pos, Blocks.GLASS.getDefaultState(), ResourceKind.FREE));
+					} else if (corner) {
+						steps.addLast(BuildStep.block(pos, logPlaceholder, ResourceKind.ANY_LOG));
 					} else {
-						steps.addLast(BuildStep.block(origin.add(x, y, z), logPlaceholder, ResourceKind.ANY_LOG));
+						steps.addLast(BuildStep.block(pos, plankPlaceholder, ResourceKind.ANY_LOG_AS_PLANKS));
 					}
 				}
 			}
 		}
 
-		for (int x = 0; x < FOOTPRINT; x++) {
-			for (int z = 0; z < FOOTPRINT; z++) {
-				steps.addLast(BuildStep.block(origin.add(x, ROOF_Y, z), logPlaceholder, ResourceKind.ANY_LOG));
+		addGableRoof(steps, origin);
+	}
+
+	/**
+	 * Двускатная крыша: конёк вдоль оси X по центру (z = FOOTPRINT/2),
+	 * скаты из лестниц спускаются к переднему (z=0) и заднему (z=FOOTPRINT-1)
+	 * карнизам. Торцы (x=0 и x=FOOTPRINT-1) зашиваются треугольным фронтоном
+	 * из досок, чтобы под крышей не было дыр на чердак.
+	 */
+	private static void addGableRoof(Deque<BuildStep> steps, BlockPos origin) {
+		BlockState plankPlaceholder = Blocks.OAK_PLANKS.getDefaultState();
+		int lastIdx = FOOTPRINT - 1;
+		int ridgeZ = FOOTPRINT / 2;
+		int wallTopY = WALL_HEIGHT;
+
+		for (int z = 0; z < FOOTPRINT; z++) {
+			int distance = Math.abs(z - ridgeZ);
+			int roofY = wallTopY + 1 + (ridgeZ - distance); // чем ближе к коньку, тем выше
+
+			for (int x = 0; x < FOOTPRINT; x++) {
+				BlockPos roofPos = origin.add(x, roofY, z);
+				if (distance == 0) {
+					steps.addLast(BuildStep.block(roofPos, plankPlaceholder, ResourceKind.FREE)); // конёк
+				} else {
+					Direction facing = (z < ridgeZ) ? Direction.SOUTH : Direction.NORTH;
+					BlockState stairs = Blocks.OAK_STAIRS.getDefaultState().with(StairsBlock.FACING, facing);
+					steps.addLast(BuildStep.block(roofPos, stairs, ResourceKind.FREE));
+				}
+
+				if (x == 0 || x == lastIdx) {
+					for (int y = wallTopY + 1; y < roofY; y++) {
+						steps.addLast(BuildStep.block(origin.add(x, y, z), plankPlaceholder, ResourceKind.FREE));
+					}
+				}
 			}
 		}
 	}
